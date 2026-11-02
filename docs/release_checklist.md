@@ -28,4 +28,5 @@ Checked before publishing the repository.
 
 ## Publishing
 - [x] Screenshots of the workflows in `screenshots/` (800 px wide)
-- [ ] Public GitHub repository created and pushed
+- [x] Public GitHub repository created and pushed: https://github.com/ilakia/support-qa-loop
+- [x] Commit history uses the GitHub no-reply email
