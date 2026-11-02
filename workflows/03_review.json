@@ -1,0 +1,284 @@
+{
+  "id": "wf3ReviewLabels1",
+  "name": "3 Review and label",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "project_dir",
+              "value": "/Users/ilakia/support-qa-loop",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "run_id",
+              "value": "run_v1",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "version",
+              "value": "v1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.project_dir + '/data/test_questions.csv' }}",
+        "options": {}
+      },
+      "name": "Read test questions",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Extract questions",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $('Settings').first().json.project_dir + '/data/results_' + $('Settings').first().json.run_id + '.csv' }}",
+        "options": {}
+      },
+      "name": "Read results file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Extract results",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $('Settings').first().json.project_dir + '/data/index_' + $('Settings').first().json.version + '.json' }}",
+        "options": {}
+      },
+      "name": "Read index file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ],
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "name": "Extract index",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Give every answer one deterministic label by comparing it with the frozen test question.\n// Rules are checked in a fixed order; the first rule that fits decides the label.\nconst settings = $('Settings').first().json;\nconst questions = $('Extract questions').all();\nconst results = $('Extract results').all();\n\n// Article ids that exist in the knowledge-base version of this run.\nlet index = $('Extract index').first().json.data;\nif (Array.isArray(index)) {\n  index = index[0];\n}\nconst existingIds = [];\nfor (const article of index.articles) {\n  existingIds.push(article.id);\n}\n\n// Look up each result row by its question id.\nconst resultById = {};\nfor (const item of results) {\n  resultById[item.json.question_id] = item.json;\n}\n\n// \"I don't know\", \"I don't know.\" and \"i do not know\" all count as giving up.\nfunction saysDontKnow(answer) {\n  const text = answer.toLowerCase().replace(/[\u2019`]/g, \"'\").trim();\n  return text.startsWith(\"i don't know\") || text.startsWith('i do not know');\n}\n\n// expected_keywords: groups separated by ';' must all appear; '|' means any one of the group.\nfunction hasKeywords(answer, expected) {\n  const text = answer.toLowerCase();\n  for (const group of expected.split(';')) {\n    let groupFound = false;\n    for (const option of group.split('|')) {\n      if (option.trim() !== '' && text.includes(option.trim().toLowerCase())) {\n        groupFound = true;\n      }\n    }\n    if (!groupFound) {\n      return false;\n    }\n  }\n  return true;\n}\n\nconst rows = [];\nlet position = 0;\nfor (const item of questions) {\n  const q = item.json;\n  const r = resultById[q.question_id];\n  position = position + 1;\n\n  const expected = q.expected_action;\n  const answer = r.bot_answer || '';\n  const gaveUp = saysDontKnow(answer);\n  const top3 = [r.top1_id, r.top2_id, r.top3_id];\n  const articleExists = existingIds.includes(q.expected_article);\n  const articleRetrieved = top3.includes(q.expected_article);\n\n  let label = '';\n  let reason = '';\n  if (expected === 'escalate' && r.route === 'escalate') {\n    label = 'correct';\n    reason = 'escalated on keyword \"' + r.matched_keyword + '\"';\n  } else if (expected === 'escalate' || r.route === 'escalate') {\n    label = 'bad_escalation';\n    if (expected === 'escalate') {\n      reason = 'should escalate, but no keyword matched';\n    } else {\n      reason = 'escalated on keyword \"' + r.matched_keyword + '\" but should be answered';\n    }\n  } else if (expected === 'dont_know') {\n    if (gaveUp) {\n      label = 'correct';\n      reason = \"said I don't know (route \" + r.route + ')';\n    } else {\n      label = 'made_up';\n      reason = 'answered a question that no article covers';\n    }\n  } else if (!articleExists) {\n    if (gaveUp) {\n      label = 'missing_content';\n      reason = 'article ' + q.expected_article + ' does not exist in kb ' + r.kb_version;\n    } else {\n      label = 'made_up';\n      reason = 'answered although article ' + q.expected_article + ' does not exist';\n    }\n  } else if (!gaveUp && hasKeywords(answer, q.expected_keywords)) {\n    label = 'correct';\n    reason = 'answer contains: ' + q.expected_keywords;\n  } else if (gaveUp && articleRetrieved) {\n    label = 'dead_end';\n    reason = \"said I don't know although \" + q.expected_article + ' was in the top 3 (route ' + r.route + ')';\n  } else if (!articleRetrieved) {\n    label = 'retrieval_miss';\n    reason = q.expected_article + ' not in top 3 (' + top3.join(', ') + ')';\n  } else {\n    label = 'wrong_answer';\n    reason = q.expected_article + ' retrieved, but answer lacks: ' + q.expected_keywords;\n  }\n\n  // Every 4th question is picked in advance for the manual spot check.\n  let spotCheck = 'no';\n  if (position % 4 === 0) {\n    spotCheck = 'yes';\n  }\n\n  rows.push({\n    json: {\n      run_id: settings.run_id,\n      question_id: q.question_id,\n      category: q.category,\n      question: q.question,\n      expected_action: expected,\n      expected_article: q.expected_article,\n      expected_keywords: q.expected_keywords,\n      route: r.route,\n      top1_id: r.top1_id,\n      top1_score: r.top1_score,\n      cited_ids: r.cited_ids,\n      bot_answer: answer,\n      label: label,\n      reason: reason,\n      spot_check: spotCheck,\n      manual_label: '',\n    },\n  });\n}\nreturn rows;\n"
+      },
+      "name": "Label answers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Convert to CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Settings').first().json.project_dir + '/data/labels_' + $('Settings').first().json.run_id + '.csv' }}",
+        "options": {}
+      },
+      "name": "Write labels file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Read test questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read test questions": {
+      "main": [
+        [
+          {
+            "node": "Extract questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract questions": {
+      "main": [
+        [
+          {
+            "node": "Read results file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read results file": {
+      "main": [
+        [
+          {
+            "node": "Extract results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract results": {
+      "main": [
+        [
+          {
+            "node": "Read index file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read index file": {
+      "main": [
+        [
+          {
+            "node": "Extract index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract index": {
+      "main": [
+        [
+          {
+            "node": "Label answers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Label answers": {
+      "main": [
+        [
+          {
+            "node": "Convert to CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to CSV": {
+      "main": [
+        [
+          {
+            "node": "Write labels file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
