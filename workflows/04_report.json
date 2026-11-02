@@ -1,0 +1,181 @@
+{
+  "id": "wf4ReportRuns001",
+  "name": "4 Report",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "project_dir",
+              "value": "/Users/ilakia/support-qa-loop",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "run_id",
+              "value": "run_v1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.project_dir + '/data/labels_*.csv' }}",
+        "options": {}
+      },
+      "name": "Read all label files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Extract labels",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build a Markdown QA report for one run, plus a before/after table over all runs.\nconst settings = $('Settings').first().json;\nconst runId = settings.run_id;\n\n// CSV files written by n8n start with an invisible BOM, which can stick to the first\n// column name (\"\ufeffrun_id\"). Remove it from every column name.\nfunction clean(row) {\n  const out = {};\n  for (const key of Object.keys(row)) {\n    out[key.replace(/^\ufeff/, '')] = row[key];\n  }\n  return out;\n}\n\nconst allRows = [];\nfor (const item of $input.all()) {\n  allRows.push(clean(item.json));\n}\n\n// Rows of the run this report is about.\nconst rows = [];\nfor (const row of allRows) {\n  if (row.run_id === runId) {\n    rows.push(row);\n  }\n}\n\nconst labelOrder = ['correct', 'wrong_answer', 'missing_content', 'retrieval_miss', 'dead_end', 'bad_escalation', 'made_up'];\n\nfunction percent(part, total) {\n  return (100 * part / total).toFixed(1) + '%';\n}\n\n// Count labels and remember which questions have each label.\nconst questionsByLabel = {};\nfor (const label of labelOrder) {\n  questionsByLabel[label] = [];\n}\nfor (const row of rows) {\n  questionsByLabel[row.label].push(row.question_id);\n}\nconst total = rows.length;\nconst correct = questionsByLabel['correct'].length;\n\nconst lines = [];\nlines.push('# QA report: ' + runId);\nlines.push('');\nlines.push('Generated: ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + ' UTC');\nlines.push('');\nlines.push('## Summary');\nlines.push('');\nlines.push('**Pass rate: ' + correct + ' / ' + total + ' (' + percent(correct, total) + ')** of the frozen test questions are labelled `correct`.');\nlines.push('');\n\nlines.push('## Labels');\nlines.push('');\nlines.push('| Label | Count | Questions |');\nlines.push('|---|---|---|');\nfor (const label of labelOrder) {\n  const ids = questionsByLabel[label];\n  let shown = ids.join(', ');\n  if (label === 'correct') {\n    shown = '(not listed)';\n  }\n  lines.push('| ' + label + ' | ' + ids.length + ' | ' + shown + ' |');\n}\nlines.push('');\n\n// Pass rate per category.\nconst categories = [];\nconst perCategory = {};\nfor (const row of rows) {\n  if (!(row.category in perCategory)) {\n    categories.push(row.category);\n    perCategory[row.category] = { total: 0, correct: 0 };\n  }\n  perCategory[row.category].total = perCategory[row.category].total + 1;\n  if (row.label === 'correct') {\n    perCategory[row.category].correct = perCategory[row.category].correct + 1;\n  }\n}\nlines.push('## Per category');\nlines.push('');\nlines.push('| Category | Questions | Correct | Pass rate |');\nlines.push('|---|---|---|---|');\nfor (const category of categories) {\n  const c = perCategory[category];\n  lines.push('| ' + category + ' | ' + c.total + ' | ' + c.correct + ' | ' + percent(c.correct, c.total) + ' |');\n}\nlines.push('');\n\n// Articles to fix: problems that point at the content of one article.\nconst articleLabels = ['wrong_answer', 'missing_content', 'retrieval_miss'];\nconst articles = [];\nconst problemsByArticle = {};\nfor (const row of rows) {\n  if (articleLabels.includes(row.label)) {\n    if (!(row.expected_article in problemsByArticle)) {\n      articles.push(row.expected_article);\n      problemsByArticle[row.expected_article] = [];\n    }\n    // A '|' would end a Markdown table cell, so it is escaped as '\\\\|'.\n    const reason = row.reason.split('|').join('\\\\|');\n    problemsByArticle[row.expected_article].push(row.question_id + ' ' + row.label + ': ' + reason);\n  }\n}\narticles.sort();\nlines.push('## Articles to fix');\nlines.push('');\nif (articles.length === 0) {\n  lines.push('None.');\n} else {\n  lines.push('| Article | Problems |');\n  lines.push('|---|---|');\n  for (const article of articles) {\n    lines.push('| ' + article + ' | ' + problemsByArticle[article].join('<br>') + ' |');\n  }\n}\nlines.push('');\n\n// Rules and settings: problems caused by the escalation keywords or the threshold.\nlines.push('## Rules and settings to check');\nlines.push('');\nlet ruleProblems = 0;\nfor (const row of rows) {\n  if (row.label === 'bad_escalation' || row.label === 'dead_end') {\n    lines.push('- ' + row.question_id + ' `' + row.label + '`: ' + row.reason);\n    ruleProblems = ruleProblems + 1;\n  }\n}\nif (ruleProblems === 0) {\n  lines.push('None.');\n}\nlines.push('');\n\n// Manual spot check: how many automatic labels the human reviewer agreed with.\nlet checked = 0;\nlet agreed = 0;\nfor (const row of rows) {\n  if (row.spot_check === 'yes' && row.manual_label !== '') {\n    checked = checked + 1;\n    if (row.manual_label === row.label) {\n      agreed = agreed + 1;\n    }\n  }\n}\nlines.push('## Manual spot check');\nlines.push('');\nif (checked === 0) {\n  lines.push('Not done yet.');\n} else {\n  lines.push(agreed + ' of ' + checked + ' automatic labels confirmed by manual review.');\n}\nlines.push('');\n\n// Before/after: one line per run found in data/labels_*.csv.\nconst runs = [];\nfor (const row of allRows) {\n  if (!runs.includes(row.run_id)) {\n    runs.push(row.run_id);\n  }\n}\nruns.sort();\nlines.push('## Before / after');\nlines.push('');\nlet header = '| Run | Pass rate |';\nlet divider = '|---|---|';\nfor (const label of labelOrder) {\n  header = header + ' ' + label + ' |';\n  divider = divider + '---|';\n}\nlines.push(header);\nlines.push(divider);\nfor (const run of runs) {\n  const counts = {};\n  let runTotal = 0;\n  for (const label of labelOrder) {\n    counts[label] = 0;\n  }\n  for (const row of allRows) {\n    if (row.run_id === run) {\n      counts[row.label] = counts[row.label] + 1;\n      runTotal = runTotal + 1;\n    }\n  }\n  let line = '| ' + run + ' | ' + counts['correct'] + '/' + runTotal + ' (' + percent(counts['correct'], runTotal) + ') |';\n  for (const label of labelOrder) {\n    line = line + ' ' + counts[label] + ' |';\n  }\n  lines.push(line);\n}\nlines.push('');\n\nreturn [{ json: { report: lines.join('\\n') } }];\n"
+      },
+      "name": "Build report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "report",
+        "options": {}
+      },
+      "name": "Convert to text",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Settings').first().json.project_dir + '/reports/report_' + $('Settings').first().json.run_id + '.md' }}",
+        "options": {}
+      },
+      "name": "Write report file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Read all label files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read all label files": {
+      "main": [
+        [
+          {
+            "node": "Extract labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract labels": {
+      "main": [
+        [
+          {
+            "node": "Build report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build report": {
+      "main": [
+        [
+          {
+            "node": "Convert to text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to text": {
+      "main": [
+        [
+          {
+            "node": "Write report file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
