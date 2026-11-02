@@ -25,13 +25,13 @@
             {
               "id": "s2",
               "name": "version",
-              "value": "v1",
+              "value": "v2",
               "type": "string"
             },
             {
               "id": "s3",
               "name": "run_id",
-              "value": "run_v1",
+              "value": "run_v2",
               "type": "string"
             },
             {
@@ -49,7 +49,7 @@
             {
               "id": "s6",
               "name": "escalation_keywords",
-              "value": "billing,invoice,refund,legal,lawyer,gdpr,complaint,cancel contract,speak to a human",
+              "value": "billing problem,billing issue,billing question,billing error,invoice,refund,legal,lawyer,gdpr,make a complaint,file a complaint,have a complaint,formal complaint,i want to complain,cancel contract,speak to a human",
               "type": "string"
             }
           ]

@@ -25,13 +25,13 @@
             {
               "id": "s2",
               "name": "run_id",
-              "value": "run_v1",
+              "value": "run_v2",
               "type": "string"
             },
             {
               "id": "s3",
               "name": "version",
-              "value": "v1",
+              "value": "v2",
               "type": "string"
             }
           ]
