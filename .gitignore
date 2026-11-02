@@ -1,0 +1,11 @@
+# Embedding indexes are large and can be rebuilt from kb/ at any time
+data/index_*.json
+
+# Local n8n data folder (credentials, database) if it ever lands here
+.n8n/
+
+# macOS clutter
+.DS_Store
+
+# Private list of the deliberately planted knowledge-base flaws
+docs/known_flaws.md
