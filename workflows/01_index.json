@@ -1,0 +1,232 @@
+{
+  "id": "Smyx3EI2VcqWlDOw",
+  "name": "1 Index knowledge base",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "project_dir",
+              "value": "/Users/ilakia/support-qa-loop",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "version",
+              "value": "v1",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.project_dir + '/kb/' + $json.version + '/*.md' }}",
+        "options": {}
+      },
+      "name": "Read article files",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "text",
+        "options": {}
+      },
+      "name": "Extract text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split every article into its front matter (id, title, ...) and its body text.\n// Each input item is one .md file, with the file text in $json.data.\nconst articles = [];\nfor (const item of $input.all()) {\n  const raw = item.json.data;\n  // The file looks like: ---\\nfront matter\\n---\\nbody. Splitting on '---' gives\n  // ['', front matter, body...]. Tables use '---' too, so the body parts are joined back.\n  const parts = raw.split('---');\n  const frontMatter = parts[1];\n  const body = parts.slice(2).join('---').trim();\n\n  // Read \"key: value\" lines from the front matter.\n  const meta = {};\n  for (const line of frontMatter.split('\\n')) {\n    const colon = line.indexOf(':');\n    if (colon > 0) {\n      const key = line.slice(0, colon).trim();\n      const value = line.slice(colon + 1).trim();\n      meta[key] = value;\n    }\n  }\n\n  articles.push({\n    json: {\n      id: meta.id,\n      title: meta.title,\n      last_reviewed: meta.last_reviewed,\n      owner: meta.owner,\n      text: body,\n    },\n  });\n}\nreturn articles;\n"
+      },
+      "name": "Parse articles",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:11434/api/embed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'nomic-embed-text', input: 'search_document: ' + $json.title + '\\n' + $json.text }) }}",
+        "options": {}
+      },
+      "name": "Embed with Ollama",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pair each Ollama answer with its article and build one index object.\n// n8n keeps the item order, so answer number i belongs to article number i.\nconst articles = $('Parse articles').all();\nconst answers = $input.all();\nconst settings = $('Settings').first().json;\n\nconst index = [];\nfor (let i = 0; i < answers.length; i++) {\n  index.push({\n    id: articles[i].json.id,\n    title: articles[i].json.title,\n    last_reviewed: articles[i].json.last_reviewed,\n    owner: articles[i].json.owner,\n    text: articles[i].json.text,\n    embedding: answers[i].json.embeddings[0],\n  });\n}\n\nreturn [{\n  json: {\n    kb_version: settings.version,\n    model: 'nomic-embed-text',\n    created_at: new Date().toISOString(),\n    article_count: index.length,\n    dimensions: index[0].embedding.length,\n    articles: index,\n  },\n}];\n"
+      },
+      "name": "Build index",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "mode": "each",
+        "options": {}
+      },
+      "name": "Convert to JSON",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Settings').first().json.project_dir + '/data/index_' + $('Settings').first().json.version + '.json' }}",
+        "options": {}
+      },
+      "name": "Write index file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Read article files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read article files": {
+      "main": [
+        [
+          {
+            "node": "Extract text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract text": {
+      "main": [
+        [
+          {
+            "node": "Parse articles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse articles": {
+      "main": [
+        [
+          {
+            "node": "Embed with Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed with Ollama": {
+      "main": [
+        [
+          {
+            "node": "Build index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build index": {
+      "main": [
+        [
+          {
+            "node": "Convert to JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to JSON": {
+      "main": [
+        [
+          {
+            "node": "Write index file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
