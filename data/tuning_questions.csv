@@ -1,0 +1,11 @@
+question_id,question,should_answer,expected_article
+T01,How do I save a regular customer so I don't have to type their address every time?,yes,ADR-005
+T02,Can a customer add their floor number themselves on the tracking page?,yes,ADR-003
+T03,What does a soft time window mean?,yes,TW-001
+T04,Can I let customers choose their own delivery slot?,yes,TW-004
+T05,How do I connect a Bluetooth ring scanner to the driver app?,yes,DRV-003
+T06,Can I print shipping labels from Kerbloop?,no,
+T07,Does Kerbloop work in Japan?,no,
+T08,How do I change the language of the web planner?,no,
+T09,Can the driver app track fuel consumption?,no,
+T10,Is there a dark mode for the web planner?,no,
