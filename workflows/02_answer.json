@@ -1,0 +1,410 @@
+{
+  "id": "wf2AnswerQuestns",
+  "name": "2 Answer questions",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "s1",
+              "name": "project_dir",
+              "value": "/Users/ilakia/support-qa-loop",
+              "type": "string"
+            },
+            {
+              "id": "s2",
+              "name": "version",
+              "value": "v1",
+              "type": "string"
+            },
+            {
+              "id": "s3",
+              "name": "run_id",
+              "value": "run_v1",
+              "type": "string"
+            },
+            {
+              "id": "s4",
+              "name": "questions_file",
+              "value": "data/test_questions.csv",
+              "type": "string"
+            },
+            {
+              "id": "s5",
+              "name": "threshold",
+              "value": 0.68,
+              "type": "number"
+            },
+            {
+              "id": "s6",
+              "name": "escalation_keywords",
+              "value": "billing,invoice,refund,legal,lawyer,gdpr,complaint,cancel contract,speak to a human",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Settings",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.project_dir + '/data/index_' + $json.version + '.json' }}",
+        "options": {}
+      },
+      "name": "Read index file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "options": {}
+      },
+      "name": "Extract index",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $('Settings').first().json.project_dir + '/' + $('Settings').first().json.questions_file }}",
+        "options": {}
+      },
+      "name": "Read questions file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Extract questions",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rule-based escalation, checked BEFORE any model is used.\n// The LLM never decides escalation: if a keyword appears, the question goes to a human.\nconst keywords = $('Settings').first().json.escalation_keywords.split(',');\n\nconst out = [];\nfor (const item of $input.all()) {\n  const question = item.json.question;\n  const lower = question.toLowerCase();\n  let matched = '';\n  for (const keyword of keywords) {\n    if (lower.includes(keyword.trim())) {\n      matched = keyword.trim();\n      break;\n    }\n  }\n  out.push({\n    json: {\n      question_id: item.json.question_id,\n      category: item.json.category || '',\n      question: question,\n      matched_keyword: matched,\n    },\n  });\n}\nreturn out;\n"
+      },
+      "name": "Check escalation rules",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:11434/api/embed",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'nomic-embed-text', input: 'search_query: ' + $json.question, keep_alive: 0 }) }}",
+        "options": {}
+      },
+      "name": "Embed questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find the 3 most similar articles for every question and decide the route.\nconst settings = $('Settings').first().json;\nconst threshold = Number(settings.threshold);\n\n// The index file holds one object; Convert to File may have wrapped it in a list.\nlet index = $('Extract index').first().json.data;\nif (Array.isArray(index)) {\n  index = index[0];\n}\nconst articles = index.articles;\n\n// Cosine similarity: 1 = same direction (same meaning), 0 = unrelated.\nfunction cosine(a, b) {\n  let dot = 0;\n  let normA = 0;\n  let normB = 0;\n  for (let i = 0; i < a.length; i++) {\n    dot = dot + a[i] * b[i];\n    normA = normA + a[i] * a[i];\n    normB = normB + b[i] * b[i];\n  }\n  return dot / (Math.sqrt(normA) * Math.sqrt(normB));\n}\n\nconst systemPrompt =\n  'You are the support assistant for Kerbloop, a delivery software. ' +\n  'Answer ONLY with information from the articles below. ' +\n  'Cite the id of every article you use in square brackets, for example [ADR-001]. ' +\n  'Keep the answer short. ' +\n  \"If the articles do not contain the answer, reply exactly: I don't know\";\n\n// n8n keeps item order, so embedding number i belongs to question number i.\nconst questions = $('Check escalation rules').all();\nconst embeddings = $input.all();\n\nconst out = [];\nfor (let i = 0; i < questions.length; i++) {\n  const q = questions[i].json;\n  const vector = embeddings[i].json.embeddings[0];\n\n  // Score every article, then sort from most to least similar.\n  const scored = [];\n  for (const article of articles) {\n    scored.push({ id: article.id, title: article.title, text: article.text, score: cosine(vector, article.embedding) });\n  }\n  scored.sort(function (x, y) { return y.score - x.score; });\n  const top = scored.slice(0, 3);\n\n  // Route: escalation keywords first, then the similarity threshold, else the model answers.\n  let route = 'answer';\n  if (q.matched_keyword !== '') {\n    route = 'escalate';\n  } else if (top[0].score < threshold) {\n    route = 'dont_know';\n  }\n\n  let prompt = '';\n  for (const article of top) {\n    prompt = prompt + '[' + article.id + '] ' + article.title + '\\n' + article.text + '\\n\\n';\n  }\n  prompt = prompt + 'Question: ' + q.question;\n\n  out.push({\n    json: {\n      question_id: q.question_id,\n      category: q.category,\n      question: q.question,\n      matched_keyword: q.matched_keyword,\n      route: route,\n      top1_id: top[0].id,\n      top1_score: Number(top[0].score.toFixed(4)),\n      top2_id: top[1].id,\n      top2_score: Number(top[1].score.toFixed(4)),\n      top3_id: top[2].id,\n      top3_score: Number(top[2].score.toFixed(4)),\n      system_prompt: systemPrompt,\n      prompt: prompt,\n    },\n  });\n}\nreturn out;\n"
+      },
+      "name": "Retrieve top 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Keep only the questions that the model should answer (route = answer).\nconst out = [];\nfor (const item of $input.all()) {\n  if (item.json.route === 'answer') {\n    out.push(item);\n  }\n}\nreturn out;\n"
+      },
+      "name": "Only model questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Loop one at a time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        2000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:11434/api/generate",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'llama3.2:3b', system: $json.system_prompt, prompt: $json.prompt, stream: false, options: { temperature: 0, seed: 42, num_ctx: 4096 } }) }}",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "name": "Ask llama3.2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combine every question with its final bot answer and write one row per question.\nconst settings = $('Settings').first().json;\nconst allQuestions = $('Retrieve top 3').all();\nconst modelQuestions = $('Only model questions').all();\nconst modelAnswers = $input.all();\n\n// Model answers come back in the same order as the model questions.\nconst answerById = {};\nfor (let i = 0; i < modelQuestions.length; i++) {\n  answerById[modelQuestions[i].json.question_id] = modelAnswers[i].json.response.trim();\n}\n\nconst rows = [];\nfor (const item of allQuestions) {\n  const q = item.json;\n  let botAnswer = '';\n  if (q.route === 'escalate') {\n    botAnswer = 'Escalated to a human agent.';\n  } else if (q.route === 'dont_know') {\n    botAnswer = \"I don't know\";\n  } else {\n    botAnswer = answerById[q.question_id];\n  }\n\n  // Article ids the answer cites, for example [FD-002].\n  const cited = botAnswer.match(/\\b(ADR|TW|FD|DRV|ACC)-\\d{3}\\b/g) || [];\n  const citedUnique = [...new Set(cited)];\n\n  rows.push({\n    json: {\n      run_id: settings.run_id,\n      kb_version: settings.version,\n      threshold: settings.threshold,\n      question_id: q.question_id,\n      category: q.category,\n      question: q.question,\n      route: q.route,\n      matched_keyword: q.matched_keyword,\n      top1_id: q.top1_id,\n      top1_score: q.top1_score,\n      top2_id: q.top2_id,\n      top2_score: q.top2_score,\n      top3_id: q.top3_id,\n      top3_score: q.top3_score,\n      bot_answer: botAnswer,\n      cited_ids: citedUnique.join(';'),\n    },\n  });\n}\nreturn rows;\n"
+      },
+      "name": "Build results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "csv",
+        "options": {}
+      },
+      "name": "Convert to CSV",
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        2400,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "={{ $('Settings').first().json.project_dir + '/data/results_' + $('Settings').first().json.run_id + '.csv' }}",
+        "options": {}
+      },
+      "name": "Write results file",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        2600,
+        -200
+      ]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Settings": {
+      "main": [
+        [
+          {
+            "node": "Read index file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read index file": {
+      "main": [
+        [
+          {
+            "node": "Extract index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract index": {
+      "main": [
+        [
+          {
+            "node": "Read questions file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read questions file": {
+      "main": [
+        [
+          {
+            "node": "Extract questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract questions": {
+      "main": [
+        [
+          {
+            "node": "Check escalation rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check escalation rules": {
+      "main": [
+        [
+          {
+            "node": "Embed questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embed questions": {
+      "main": [
+        [
+          {
+            "node": "Retrieve top 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retrieve top 3": {
+      "main": [
+        [
+          {
+            "node": "Only model questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only model questions": {
+      "main": [
+        [
+          {
+            "node": "Loop one at a time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop one at a time": {
+      "main": [
+        [
+          {
+            "node": "Build results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask llama3.2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask llama3.2": {
+      "main": [
+        [
+          {
+            "node": "Loop one at a time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build results": {
+      "main": [
+        [
+          {
+            "node": "Convert to CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to CSV": {
+      "main": [
+        [
+          {
+            "node": "Write results file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

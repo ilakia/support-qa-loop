@@ -1,0 +1,22 @@
+﻿run_id,kb_version,threshold,question_id,category,question,route,matched_keyword,top1_id,top1_score,top2_id,top2_score,top3_id,top3_score,bot_answer,cited_ids
+tuning,v1,0.45,T01,,How do I save a regular customer so I don't have to type their address every time?,answer,,ADR-005,0.8196,FD-001,0.6752,ADR-001,0.6715,"[ADR-005] Saving regular customers in the address book. To save a regular customer, follow these steps:
+
+1. Open a stop that is already correct, with the right pin and details.
+2. Click **Save to address book**.
+3. Give the entry a short name, for example ""Bakery Krause"".
+
+When you create a new stop, type the saved name in the **Address** field.",ADR-005
+tuning,v1,0.45,T02,,Can a customer add their floor number themselves on the tracking page?,answer,,ADR-003,0.6898,ACC-001,0.6797,FD-001,0.6396,"No, customers cannot add their floor number themselves on the tracking page. According to [FD-001], customers can add a delivery note, but the floor number is not mentioned as an option.",FD-001
+tuning,v1,0.45,T03,,What does a soft time window mean?,answer,,TW-001,0.6855,TW-003,0.6258,TW-004,0.6202,A soft time window means Kerbloop tries to reach the stop in the window but may plan it later if that makes the whole route much shorter.,
+tuning,v1,0.45,T04,,Can I let customers choose their own delivery slot?,answer,,TW-004,0.7429,FD-001,0.6487,ADR-005,0.6246,I don't know,
+tuning,v1,0.45,T05,,How do I connect a Bluetooth ring scanner to the driver app?,answer,,DRV-003,0.7423,DRV-001,0.6728,DRV-005,0.6582,"[DRV-004] Navigation settings
+# Navigation settings
+
+Admins can allow external Bluetooth ring scanners under **Settings > Driver app**. Pair the scanner in the phone's Bluetooth settings, then select it in the app under **Menu > Scanner**.
+
+However, I couldn't find the exact steps to pair the scanner in the phone's Bluetooth settings.",DRV-004
+tuning,v1,0.45,T06,,Can I print shipping labels from Kerbloop?,answer,,ADR-001,0.6856,ACC-004,0.6734,ACC-005,0.6695,I don't know,
+tuning,v1,0.45,T07,,Does Kerbloop work in Japan?,answer,,ACC-005,0.6633,DRV-002,0.6631,DRV-005,0.658,I don't know,
+tuning,v1,0.45,T08,,How do I change the language of the web planner?,answer,,ACC-002,0.7141,ACC-005,0.6585,TW-002,0.646,I don't know,
+tuning,v1,0.45,T09,,Can the driver app track fuel consumption?,answer,,DRV-004,0.7039,DRV-002,0.6812,DRV-003,0.6804,I don't know,
+tuning,v1,0.45,T10,,Is there a dark mode for the web planner?,answer,,ACC-002,0.6619,ACC-005,0.6381,DRV-004,0.6079,I don't know.,
