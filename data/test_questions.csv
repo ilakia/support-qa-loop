@@ -1,0 +1,41 @@
+question_id,category,question,expected_action,expected_article,expected_keywords
+Q01,addresses,I typed an address and the pin is grey. What does that mean?,answer,ADR-002,confirmed
+Q02,addresses,The pin for one customer is at the wrong entrance of the building. How do I move it?,answer,ADR-002,Edit location
+Q03,addresses,Can Kerbloop remember a pin I corrected so I don't have to fix it again next week?,answer,ADR-002,Remember this location
+Q04,addresses,Where do I enter the floor and apartment number so the driver sees it?,answer,ADR-003,Address details
+Q05,addresses,I get the error 'Address outside service area'. Who can fix that?,answer,ADR-004,Admin
+Q06,addresses,Can my drivers add a new stop themselves in the app?,answer,ADR-001,cannot|can't
+Q07,addresses,How do I upload 200 stops at once from an Excel sheet?,answer,ADR-006,Import
+Q08,addresses,How many customers can we save in the address book?,answer,ADR-005,"5,000|5000"
+Q09,time_windows,What is the shortest delivery window I can give a stop?,answer,TW-001,30 minutes|30-minute
+Q10,time_windows,The customer wants a later time but the driver already started the route. Can I still change it?,answer,TW-002,Move stop
+Q11,time_windows,Does the customer get a message when the driver is running late?,answer,TW-003,15 minutes
+Q12,time_windows,How late can a customer still change the time slot they picked on the tracking page?,answer,TW-004,2 hours
+Q13,time_windows,How often does the arrival time refresh while the driver is on the road?,answer,TW-005,2 minutes
+Q14,failed_deliveries,How many times will you try to deliver a parcel before it goes back?,answer,FD-002,3 attempts|3 delivery attempts|three attempts|three delivery attempts|3 times|three times
+Q15,failed_deliveries,Nobody was home. Is the driver allowed to give the parcel to a neighbour?,answer,FD-001,Delivery options
+Q16,failed_deliveries,What happens if the customer refuses to take the parcel?,answer,FD-002,Return to depot
+Q17,failed_deliveries,How long can a customer collect a returned parcel at our depot?,answer,FD-003,7 days
+Q18,failed_deliveries,A customer complaint says the parcel never arrived. How do I check the proof of delivery?,answer,FD-004,Proof
+Q19,failed_deliveries,How long do you keep the delivery photos?,answer,FD-004,90 days
+Q20,failed_deliveries,The address on the label is wrong. What should the driver select in the app?,answer,FD-005,Wrong address
+Q21,driver_app,One of my drivers forgot their PIN. How do they get a new one?,answer,DRV-001,Reset PIN
+Q22,driver_app,How long can a driver keep working without internet?,answer,DRV-002,48 hours
+Q23,driver_app,Is it OK for a driver to log out while photos are still waiting to upload?,answer,DRV-002,delet
+Q24,driver_app,The barcode on a parcel is torn and won't scan. What can the driver do?,answer,DRV-003,by hand
+Q25,driver_app,Which Android version do drivers need for the app?,answer,DRV-005,Android 11|version 11
+Q26,account,How do I give a new dispatcher access to the web planner?,answer,ACC-001,Invite user
+Q27,account,Which role can look at reports but not change anything?,answer,ACC-002,Viewer
+Q28,account,An employee left the company. How do I remove their access?,answer,ACC-003,deactivat
+Q29,account,How far back can I export delivery data?,answer,ACC-004,24 months
+Q30,account,Can I export a list of all returned parcels for our billing team?,answer,ACC-004,Returns
+Q31,account,How many drivers can we have on the Professional plan?,answer,ACC-005,100 drivers|100 active
+Q32,escalation,I was charged twice on my last invoice. Can you fix it?,escalate,,
+Q33,escalation,We want to cancel contract at the end of the year. What is the notice period?,escalate,,
+Q34,escalation,Can I get a refund for the months we did not use Kerbloop?,escalate,,
+Q35,escalation,"Under GDPR, how long do you keep our customers' phone numbers?",escalate,,
+Q36,escalation,Our lawyer needs a copy of the data processing agreement.,escalate,,
+Q37,escalation,"This isn't helping, I want to speak to a human.",escalate,,
+Q38,out_of_scope,Does Kerbloop connect to our Shopify store?,dont_know,,
+Q39,out_of_scope,Can drivers send chat messages to each other in the app?,dont_know,,
+Q40,out_of_scope,Does the driver app work on an Apple Watch?,dont_know,,
