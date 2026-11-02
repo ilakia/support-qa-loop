@@ -10,7 +10,7 @@ Checked before publishing the repository.
 - [x] Fixes change articles and rules only; every change listed in `docs/changelog.md`
 - [x] Test-informed changes and deliberately unfixed problems stated openly
 - [x] Manual spot check of 10 labels for run_v1 (10/10 agree)
-- [ ] Manual spot check of 10 labels for run_v2
+- [x] Manual spot check of 10 labels for run_v2 (10/10 agree)
 
 ## Reproducibility
 - [x] All four workflows exported to `workflows/` and run end to end on kb/v1 and kb/v2

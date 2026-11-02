@@ -1,6 +1,6 @@
 # QA report: run_v2
 
-Generated: 2026-11-02 08:50 UTC
+Generated: 2026-11-02 08:53 UTC
 
 ## Summary
 
@@ -50,7 +50,7 @@ Generated: 2026-11-02 08:50 UTC
 
 ## Manual spot check
 
-Not done yet.
+10 of 10 automatic labels confirmed by manual review.
 
 ## Before / after
 
