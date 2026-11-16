@@ -71,8 +71,8 @@ More screenshots: [1 Index](screenshots/workflow1_index.jpg),
 - The 0.68 threshold blocks two answerable questions (Q23, Q31). It was not
   changed, because changing it after seeing test results would tune on the test set.
 - Labels use keyword matching, which can miss correct answers worded
-  differently. The manual spot check (10 of 10 labels confirmed for run_v1)
-  is the safeguard.
+  differently. The manual spot check (10 of 10 labels confirmed for both
+  run_v1 and run_v2) is the safeguard.
 - The escalation fix in v2 was found with two test questions; it is listed as
   a test-informed change in the changelog.
 - 40 questions is a small test set; a 10-point change equals 4 questions.
