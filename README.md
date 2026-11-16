@@ -77,6 +77,13 @@ More screenshots: [1 Index](screenshots/workflow1_index.jpg),
   a test-informed change in the changelog.
 - 40 questions is a small test set; a 10-point change equals 4 questions.
 
+### What I would do next
+
+- Run the same 40 questions with a larger model, to separate model errors from content errors.
+- Add an LLM-as-judge for grading and check it against the manual labels.
+- Add hybrid search (keywords and embeddings) for retrieval misses like Q20.
+- Turn real failed conversations into new test questions, so the test set grows from real problems.
+
 ## Run it yourself
 
 Requirements: macOS or Linux, [Ollama](https://ollama.com), Node.js 24 (n8n 2.x
@@ -120,8 +127,11 @@ n8n Community Edition (Sustainable Use License), Ollama (MIT), llama3.2:3b
 (Llama 3.2 Community License), nomic-embed-text (Apache 2.0). No paid or cloud
 services are used.
 
-The knowledge base, test questions and workflow code were drafted with the
-help of an AI coding assistant and reviewed by me.
+I designed the evaluation approach: the frozen test set, the failure labels,
+the threshold tuning on a separate question set, and the root-cause analysis
+behind every fix. An AI coding assistant helped me draft the knowledge base,
+the test questions and the workflow code, which I reviewed, ran and checked
+by hand.
 
 ## License
 
